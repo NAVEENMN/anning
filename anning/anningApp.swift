@@ -17,5 +17,6 @@ struct anningApp: App {
             ContentView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
+        .windowToolbarStyle(.unified)
     }
 }

@@ -14,9 +14,15 @@ struct PersistenceController {
     static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+        for i in 0..<10 {
+            let p = Paper(context: viewContext)
+            p.id = UUID()
+            p.title = "Example Paper \(i + 1)"
+            p.shortTitle = "Paper \(i + 1)"
+            p.abstractText = "This is a placeholder abstract for paper \(i + 1)."
+            p.arxivPDFURL = "https://arxiv.org/pdf/1706.03762.pdf"
+            p.authorsJSON = "[]"
+            p.createdAt = Date()
         }
         do {
             try viewContext.save()
