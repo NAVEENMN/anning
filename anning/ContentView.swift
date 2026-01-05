@@ -107,7 +107,13 @@ struct ContentView: View {
     private var center: some View {
         Group {
             if let paper = selectedPaper {
-                PaperDetailView(paper: paper)
+                VSplitView {
+                    PaperDetailView(paper: paper)
+                        .frame(minHeight: 300)
+
+                    NotesPanel(paper: paper)
+                        .frame(minHeight: 180, idealHeight: 260)
+                }
             } else {
                 Text("Select a paper")
                     .foregroundStyle(.secondary)

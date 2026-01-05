@@ -22,6 +22,7 @@ struct PersistenceController {
             p.abstractText = "This is a placeholder abstract for paper \(i + 1)."
             p.arxivPDFURL = "https://arxiv.org/pdf/1706.03762.pdf"
             p.authorsJSON = "[]"
+            p.notesJSON = "{}"
             p.createdAt = Date()
         }
         do {
