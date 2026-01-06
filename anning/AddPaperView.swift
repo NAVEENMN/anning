@@ -12,6 +12,7 @@ struct AddPaperView: View {
     @State private var shortTitle: String = ""
     @State private var abstractText: String = ""
     @State private var arxivPDFURL: String = ""
+    @State private var paperType: PaperType = .empiricalWork
     @State private var authors: [AuthorInput] = [AuthorInput(firstName: "", lastName: "")]
     @State private var errorMessage: String?
 
@@ -25,6 +26,13 @@ struct AddPaperView: View {
                 Section {
                     TextField("Paper title", text: $title)
                     TextField("Short title (max 5 words)", text: $shortTitle)
+
+                    Picker("Type", selection: $paperType) {
+                        ForEach(PaperType.allCases) { t in
+                            Text(t.displayName).tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
 
                     TextField("arXiv PDF URL (https://arxiv.org/pdf/<id>.pdf)", text: $arxivPDFURL)
                         .autocorrectionDisabled()
@@ -108,6 +116,7 @@ struct AddPaperView: View {
         shortTitle = p.shortTitle ?? ""
         abstractText = p.abstractText ?? ""
         arxivPDFURL = p.arxivPDFURL ?? ""
+        paperType = paperTypeFromStored(p.paperType)
 
         if let json = p.authorsJSON, let data = json.data(using: .utf8),
            let decoded = try? JSONDecoder().decode([AuthorInput].self, from: data),
@@ -180,6 +189,8 @@ struct AddPaperView: View {
 
         withAnimation {
             let paper: Paper
+            let isEditing = (paperToEdit != nil)
+
             if let existing = paperToEdit {
                 paper = existing
             } else {
@@ -188,10 +199,22 @@ struct AddPaperView: View {
                 paper.createdAt = Date()
             }
 
+            // If editing and URL changed, invalidate cached PDF
+            if isEditing {
+                let previousURL = normalizeArxivPDFURL(paper.arxivPDFURL ?? "")
+                if previousURL != cleanedURL {
+                    if let path = paper.localPDFPath, FileManager.default.fileExists(atPath: path) {
+                        try? FileManager.default.removeItem(atPath: path)
+                    }
+                    paper.localPDFPath = nil
+                }
+            }
+
             paper.title = cleanedTitle
             paper.shortTitle = cleanedShort
             paper.abstractText = cleanedAbstract
             paper.arxivPDFURL = cleanedURL
+            paper.paperType = paperType.rawValue
             paper.authorsJSON = authorsJSON
 
             do {

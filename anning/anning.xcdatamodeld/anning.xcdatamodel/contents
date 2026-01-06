@@ -1,12 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24411" systemVersion="25B78" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Event" representedClassName="Event" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="eventType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="longDetails" optional="YES" attributeType="String"/>
+        <attribute name="shortTitle" optional="YES" attributeType="String"/>
+        <attribute name="summaryText" optional="YES" attributeType="String"/>
+        <attribute name="url" optional="YES" attributeType="String"/>
+    </entity>
     <entity name="Paper" representedClassName="Paper" syncable="YES" codeGenerationType="class">
         <attribute name="abstractText" optional="YES" attributeType="String"/>
         <attribute name="arxivPDFURL" optional="YES" attributeType="String"/>
         <attribute name="authorsJSON" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="localPDFPath" optional="YES" attributeType="String"/>
         <attribute name="notesJSON" optional="YES" attributeType="String"/>
+        <attribute name="paperType" optional="YES" attributeType="String"/>
         <attribute name="shortTitle" optional="YES" attributeType="String"/>
         <attribute name="title" optional="YES" attributeType="String"/>
     </entity>

@@ -23,6 +23,7 @@ struct PersistenceController {
             p.arxivPDFURL = "https://arxiv.org/pdf/1706.03762.pdf"
             p.authorsJSON = "[]"
             p.notesJSON = "{}"
+            p.paperType = PaperType.empiricalWork.rawValue
             p.createdAt = Date()
         }
         do {
