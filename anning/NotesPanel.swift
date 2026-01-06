@@ -119,11 +119,11 @@ struct NotesPanel: View {
             loadFromPaper()
             ensureSelectedIsValid()
         }
-        .onChange(of: paper.objectID) { _ in
+        .onChange(of: paper.objectID) {
             loadFromPaper()
             ensureSelectedIsValid()
         }
-        .onChange(of: paper.paperType) { _ in
+        .onChange(of: paper.paperType) {
             ensureSelectedIsValid()
         }
     }

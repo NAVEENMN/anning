@@ -73,7 +73,9 @@ struct AddEventView: View {
             }
         }
         .onAppear { loadIfEditing() }
-        .onChange(of: eventToEdit?.objectID) { _ in loadIfEditing() }
+        .onChange(of: eventToEdit?.objectID) {
+            loadIfEditing()
+        }
     }
 
     private func loadIfEditing() {

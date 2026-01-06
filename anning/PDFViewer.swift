@@ -21,112 +21,6 @@ struct PDFKitView: NSViewRepresentable {
     }
 }
 
-/// Downloads a remote PDF (or loads local file URL) and displays it using PDFKit.
-struct PDFRemoteViewer: View {
-    let urlString: String
-
-    @State private var document: PDFDocument?
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    var body: some View {
-        Group {
-            if isLoading {
-                VStack(spacing: 8) {
-                    ProgressView()
-                    Text("Loading PDF…")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 260)
-            } else if let errorMessage {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Couldn't load PDF")
-                        .font(.headline)
-                    Text(errorMessage)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-                .frame(maxWidth: .infinity, minHeight: 260, alignment: .leading)
-            } else if let document {
-                PDFKitView(document: document)
-                    .frame(maxWidth: .infinity, minHeight: 500)
-            } else {
-                Text("No PDF loaded.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 260)
-            }
-        }
-        .onAppear {
-            loadIfNeeded()
-        }
-        .onChange(of: urlString) {
-            document = nil
-            errorMessage = nil
-            isLoading = false
-            loadIfNeeded()
-        }
-    }
-
-    private func loadIfNeeded() {
-        guard document == nil, !isLoading else { return }
-
-        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed) else {
-            errorMessage = "Invalid URL: \(trimmed)"
-            return
-        }
-
-        // Local file URL support
-        if url.isFileURL {
-            if let doc = PDFDocument(url: url) {
-                document = doc
-            } else {
-                errorMessage = "Failed to open local PDF."
-            }
-            return
-        }
-
-        // Remote URL: download the bytes, then build PDFDocument(data:)
-        isLoading = true
-        errorMessage = nil
-
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 60)
-
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                isLoading = false
-
-                if let error {
-                    errorMessage = error.localizedDescription
-                    return
-                }
-
-                guard let http = response as? HTTPURLResponse else {
-                    errorMessage = "No HTTP response."
-                    return
-                }
-
-                guard (200...299).contains(http.statusCode) else {
-                    errorMessage = "HTTP \(http.statusCode)"
-                    return
-                }
-
-                guard let data, !data.isEmpty else {
-                    errorMessage = "Empty response."
-                    return
-                }
-
-                guard let doc = PDFDocument(data: data) else {
-                    errorMessage = "Response was not a valid PDF."
-                    return
-                }
-
-                document = doc
-            }
-        }.resume()
-    }
-}
-
 /// Cached PDF viewer that stores PDFs locally in Application Support
 struct PaperPDFViewer: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -136,7 +30,7 @@ struct PaperPDFViewer: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    // NEW: prevents reloading loops when SwiftUI recreates the view/task
+    // prevents reload loops
     @State private var lastLoadedKey: String? = nil
 
     var body: some View {
@@ -148,6 +42,7 @@ struct PaperPDFViewer: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 260)
+
             } else if let errorMessage {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Couldn't load PDF")
@@ -157,9 +52,11 @@ struct PaperPDFViewer: View {
                         .textSelection(.enabled)
                 }
                 .frame(maxWidth: .infinity, minHeight: 260, alignment: .leading)
+
             } else if let document {
                 PDFKitView(document: document)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             } else {
                 Text("No PDF loaded.")
                     .foregroundStyle(.secondary)
@@ -171,14 +68,12 @@ struct PaperPDFViewer: View {
         }
     }
 
-    // Keep key stable and based only on what should trigger a reload
     private var taskKey: String {
         let url = normalizeArxivPDFURL(paper.arxivPDFURL ?? "")
         return "\(paper.objectID.uriRepresentation().absoluteString)::\(url)"
     }
 
     private func loadPDFIfNeeded() async {
-        // If we already loaded for this key and still have a document, do nothing.
         if lastLoadedKey == taskKey, document != nil, errorMessage == nil {
             return
         }
@@ -189,7 +84,6 @@ struct PaperPDFViewer: View {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
-            // IMPORTANT: don't nil out `document` unless this is a new key
             if lastLoadedKey != taskKey {
                 document = nil
             }
@@ -202,6 +96,7 @@ struct PaperPDFViewer: View {
             await MainActor.run {
                 isLoading = false
                 errorMessage = "Missing/invalid PDF URL."
+                lastLoadedKey = taskKey
             }
             return
         }
@@ -223,6 +118,7 @@ struct PaperPDFViewer: View {
             await MainActor.run {
                 isLoading = false
                 errorMessage = "Cache directory error: \(error.localizedDescription)"
+                lastLoadedKey = taskKey
             }
             return
         }
@@ -247,7 +143,7 @@ struct PaperPDFViewer: View {
             }
         }
 
-        // 2) If deterministic cache exists, use it (even if localPDFPath is nil)
+        // 2) If deterministic cache exists, use it
         if PDFCache.fileExists(at: expectedURL), let doc = PDFDocument(url: expectedURL) {
             await MainActor.run {
                 paper.localPDFPath = expectedURL.path
@@ -261,7 +157,7 @@ struct PaperPDFViewer: View {
             return
         }
 
-        // 3) Download once and write to deterministic cache file
+        // 3) Download and cache
         do {
             let (data, response) = try await URLSession.shared.data(from: remoteURL)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -285,11 +181,11 @@ struct PaperPDFViewer: View {
                 document = doc
                 lastLoadedKey = taskKey
             }
+
         } catch {
             await MainActor.run {
                 isLoading = false
                 errorMessage = error.localizedDescription
-                // still set lastLoadedKey so we don't thrash on the same failing URL
                 lastLoadedKey = taskKey
             }
         }

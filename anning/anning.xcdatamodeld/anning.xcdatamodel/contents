@@ -15,11 +15,17 @@
         <attribute name="arxivPDFURL" optional="YES" attributeType="String"/>
         <attribute name="authorsJSON" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="gutterMarkersJSON" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="localPDFPath" optional="YES" attributeType="String"/>
         <attribute name="notesJSON" optional="YES" attributeType="String"/>
         <attribute name="paperType" optional="YES" attributeType="String"/>
         <attribute name="shortTitle" optional="YES" attributeType="String"/>
         <attribute name="title" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="Workspace" representedClassName="Workspace" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="researchObjective" optional="YES" attributeType="String"/>
     </entity>
 </model>

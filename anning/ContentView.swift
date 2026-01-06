@@ -37,8 +37,9 @@ struct ContentView: View {
 
     // UI
     @State private var isSidebarVisible: Bool = true
-    @State private var isInspectorVisible: Bool = true
+    @SceneStorage("isInspectorVisible") private var isInspectorVisible: Bool = false
     @State private var eventsSortAscending: Bool = true
+    @SceneStorage("papersNotesFraction_v2") private var papersNotesFraction: Double = 0.50
 
     var body: some View {
         HSplitView {
@@ -98,12 +99,18 @@ struct ContentView: View {
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 560, minHeight: 520)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .anningSplitFractionChanged)) { note in
+            if let v = note.object as? Double {
+                papersNotesFraction = v
+            }
+        }
     }
 
     // MARK: - Sidebar
 
     private var sidebar: some View {
         VStack(spacing: 0) {
+            // Top navigator strip
             HStack(spacing: 8) {
                 navButton(tab: .papers, systemImage: "folder", selectedSystemImage: "folder.fill", help: "Papers")
                 navButton(tab: .events, systemImage: "list.bullet", selectedSystemImage: "list.bullet", help: "Events")
@@ -114,11 +121,21 @@ struct ContentView: View {
 
             Divider()
 
-            if navigatorTab == .papers {
-                papersList
-            } else {
-                eventsList
+            // Middle: scrollable list area
+            Group {
+                if navigatorTab == .papers {
+                    papersList
+                } else {
+                    eventsList
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            // Bottom: sticky objective panel
+            ResearchObjectivePanel()
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -207,14 +224,10 @@ struct ContentView: View {
         Group {
             if navigatorTab == .papers {
                 if let paper = selectedPaper {
-                    VSplitView {
+                    PersistentVSplitView(bottomFraction: $papersNotesFraction, minTop: 320, minBottom: 240) {
                         PaperDetailView(paper: paper)
-                            .id(paper.objectID)
-                            .frame(minHeight: 300)
-
+                    } bottom: {
                         NotesPanel(paper: paper)
-                            .id(paper.objectID)
-                            .frame(minHeight: 180, idealHeight: 260)
                     }
                 } else {
                     Text("Select a paper")
@@ -276,17 +289,12 @@ struct ContentView: View {
 
     private var eventSelectionSetBinding: Binding<Set<NSManagedObjectID>> {
         Binding(
-            get: {
-                if let id = selectedEventObjectID { return [id] }
-                return []
-            },
-            set: { newSet in
-                selectedEventObjectID = newSet.first
-            }
+            get: { selectedEventObjectID.map { [$0] } ?? [] },
+            set: { newSet in selectedEventObjectID = newSet.first }
         )
     }
 
-    // MARK: - Paper helpers
+    // MARK: - Helpers
 
     private func displayTitle(for paper: Paper) -> String {
         let short = (paper.shortTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -320,7 +328,8 @@ struct ContentView: View {
         withAnimation {
             if selectedPaperObjectID == paper.objectID { selectedPaperObjectID = nil }
             viewContext.delete(paper)
-            try? viewContext.save()
+            do { try viewContext.save() }
+            catch { let nsError = error as NSError; fatalError("Unresolved error \(nsError), \(nsError.userInfo)") }
         }
     }
 
@@ -331,11 +340,7 @@ struct ContentView: View {
             }
             if let obj = try? viewContext.existingObject(with: id) {
                 viewContext.delete(obj)
-                do { try viewContext.save() }
-                catch {
-                    let nsError = error as NSError
-                    fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-                }
+                try? viewContext.save()
             }
         }
     }
@@ -343,12 +348,8 @@ struct ContentView: View {
 
 private struct PaperDetailView: View {
     let paper: Paper
-    var body: some View {
-        PaperPDFViewer(paper: paper)
-    }
+    var body: some View { PaperPDFViewer(paper: paper) }
 }
-
-// MARK: - Events center table
 
 struct EventRow: Identifiable {
     let objectID: NSManagedObjectID
@@ -356,7 +357,6 @@ struct EventRow: Identifiable {
     let shortTitle: String
     let eventType: EventType
     let url: String?
-
     var id: NSManagedObjectID { objectID }
 }
 
@@ -368,44 +368,28 @@ struct EventsCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Events")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-
+                Text("Events").font(.headline).foregroundStyle(.secondary)
                 Spacer()
-
-                Button {
-                    sortAscending.toggle()
-                } label: {
+                Button { sortAscending.toggle() } label: {
                     Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
                 }
                 .buttonStyle(.borderless)
-                .help(sortAscending ? "Sort by date ascending" : "Sort by date descending")
             }
             .padding(10)
 
             Divider()
 
             Table(rows, selection: $selection) {
-                TableColumn("Date") { r in
-                    Text(dateOnlyFormatter.string(from: r.date))
-                }
-
+                TableColumn("Date") { r in Text(dateOnlyFormatter.string(from: r.date)) }
                 TableColumn("Type") { r in
                     Label(r.eventType.displayName, systemImage: r.eventType.systemImage)
                         .labelStyle(.titleAndIcon)
                 }
-
-                TableColumn("Short title") { r in
-                    Text(r.shortTitle)
-                }
-
+                TableColumn("Short title") { r in Text(r.shortTitle) }
                 TableColumn("URL") { r in
                     if let s = r.url, !s.isEmpty, let link = URL(string: s) {
                         Link("Link", destination: link)
-                    } else {
-                        Text("")
-                    }
+                    } else { Text("") }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -419,10 +403,3 @@ private let dateOnlyFormatter: DateFormatter = {
     f.timeStyle = .none
     return f
 }()
-
-/// Shared with AddPaperView for decoding in the list UI.
-struct AuthorInput: Codable, Identifiable, Equatable {
-    var id: UUID = UUID()
-    var firstName: String
-    var lastName: String
-}

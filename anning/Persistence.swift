@@ -26,6 +26,12 @@ struct PersistenceController {
             p.paperType = PaperType.empiricalWork.rawValue
             p.createdAt = Date()
         }
+
+        // Seed workspace
+        let w = Workspace(context: viewContext)
+        w.id = UUID()
+        w.createdAt = Date()
+        w.researchObjective = "Track the evolution of attention mechanisms and build a narrative system for papers."
         do {
             try viewContext.save()
         } catch {
@@ -44,6 +50,13 @@ struct PersistenceController {
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }
+
+        // Enable lightweight migration
+        if let desc = container.persistentStoreDescriptions.first {
+            desc.shouldMigrateStoreAutomatically = true
+            desc.shouldInferMappingModelAutomatically = true
+        }
+
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in
             if let error = error as NSError? {
                 // Replace this implementation with code to handle the error appropriately.
