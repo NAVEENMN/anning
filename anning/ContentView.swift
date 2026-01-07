@@ -4,6 +4,7 @@ import CoreData
 private enum LeftNavigatorTab: Hashable {
     case papers
     case events
+    case todos
 }
 
 struct ContentView: View {
@@ -23,6 +24,16 @@ struct ContentView: View {
     )
     private var events: FetchedResults<Event>
 
+    // Todos
+    @FetchRequest(
+        sortDescriptors: [
+            NSSortDescriptor(keyPath: \TodoItem.date, ascending: false),
+            NSSortDescriptor(keyPath: \TodoItem.createdAt, ascending: false)
+        ],
+        animation: .default
+    )
+    private var todos: FetchedResults<TodoItem>
+
     @State private var navigatorTab: LeftNavigatorTab = .papers
 
     // Sheets
@@ -34,6 +45,7 @@ struct ContentView: View {
     // Selection
     @State private var selectedPaperObjectID: NSManagedObjectID? = nil
     @State private var selectedEventObjectID: NSManagedObjectID? = nil
+    @State private var selectedTodoObjectID: NSManagedObjectID? = nil
 
     // UI
     @State private var isSidebarVisible: Bool = true
@@ -71,12 +83,18 @@ struct ContentView: View {
                 .help(isInspectorVisible ? "Hide Inspector" : "Show Inspector")
 
                 Button {
-                    if navigatorTab == .papers { isShowingAddPaper = true }
-                    else { isShowingAddEvent = true }
+                    switch navigatorTab {
+                    case .papers:
+                        isShowingAddPaper = true
+                    case .events:
+                        isShowingAddEvent = true
+                    case .todos:
+                        addTodoItem()
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
-                .help(navigatorTab == .papers ? "Add Paper" : "Add Event")
+                .help(navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo"))
             }
         }
         .sheet(isPresented: $isShowingAddPaper) {
@@ -114,6 +132,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 navButton(tab: .papers, systemImage: "folder", selectedSystemImage: "folder.fill", help: "Papers")
                 navButton(tab: .events, systemImage: "list.bullet", selectedSystemImage: "list.bullet", help: "Events")
+                navButton(tab: .todos, systemImage: "checkmark.circle", selectedSystemImage: "checkmark.circle.fill", help: "Todo")
                 Spacer()
             }
             .padding(.horizontal, 10)
@@ -125,8 +144,10 @@ struct ContentView: View {
             Group {
                 if navigatorTab == .papers {
                     papersList
-                } else {
+                } else if navigatorTab == .events {
                     eventsList
+                } else {
+                    todosList
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,6 +186,7 @@ struct ContentView: View {
         // Clear selection when switching modes (keeps center/inspector consistent)
         selectedPaperObjectID = nil
         selectedEventObjectID = nil
+        selectedTodoObjectID = nil
     }
 
     private var papersList: some View {
@@ -218,6 +240,29 @@ struct ContentView: View {
         .listStyle(.sidebar)
     }
 
+    private var todosList: some View {
+        List(selection: $selectedTodoObjectID) {
+            ForEach(todos) { t in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(t.todoText?.isEmpty == false ? (t.todoText ?? "") : "Enter todo")
+                        .font(.headline)
+
+                    HStack(spacing: 8) {
+                        Text(dateOnlyFormatter.string(from: t.date ?? Date()))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Text(todoPriorityFromStored(t.priority).label)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tag(t.objectID)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
     // MARK: - Center
 
     private var center: some View {
@@ -234,12 +279,14 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else {
+            } else if navigatorTab == .events {
                 EventsCenterView(
                     rows: eventsSorted,
                     selection: eventSelectionSetBinding,
                     sortAscending: $eventsSortAscending
                 )
+            } else {
+                TodoCenterView(rows: todos.map { TodoRow(item: $0) }, selection: todoSelectionSetBinding)
             }
         }
     }
@@ -251,9 +298,11 @@ struct ContentView: View {
             if navigatorTab == .papers {
                 InspectorView(paper: selectedPaper)
                     .id(selectedPaper?.objectID)
-            } else {
+            } else if navigatorTab == .events {
                 EventInspectorView(event: selectedEvent)
                     .id(selectedEvent?.objectID)
+            } else {
+                Color.clear
             }
         }
     }
@@ -291,6 +340,13 @@ struct ContentView: View {
         Binding(
             get: { selectedEventObjectID.map { [$0] } ?? [] },
             set: { newSet in selectedEventObjectID = newSet.first }
+        )
+    }
+
+    private var todoSelectionSetBinding: Binding<Set<NSManagedObjectID>> {
+        Binding(
+            get: { selectedTodoObjectID.map { [$0] } ?? [] },
+            set: { newSet in selectedTodoObjectID = newSet.first }
         )
     }
 
@@ -341,6 +397,25 @@ struct ContentView: View {
             if let obj = try? viewContext.existingObject(with: id) {
                 viewContext.delete(obj)
                 try? viewContext.save()
+            }
+        }
+    }
+
+    private func addTodoItem() {
+        withAnimation {
+            let t = TodoItem(context: viewContext)
+            t.id = UUID()
+            t.date = Date()
+            t.priority = "p3"
+            t.todoText = ""
+            t.isDone = false
+            t.createdAt = Date()
+
+            do {
+                try viewContext.save()
+                selectedTodoObjectID = t.objectID
+            } catch {
+                print("Failed to add todo:", error)
             }
         }
     }
