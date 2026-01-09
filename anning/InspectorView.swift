@@ -57,7 +57,7 @@ private struct MetadataInspectorTab: View {
                 }
 
                 LabeledContent("Abstract") {
-                    Text(paper.abstractText ?? "")
+                    Text(RichTextStorage.plainText(paper.abstractText))
                         .textSelection(.enabled)
                 }
             }

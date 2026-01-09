@@ -34,6 +34,7 @@
     <entity name="Workspace" representedClassName="Workspace" syncable="YES" codeGenerationType="class">
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="projectTitle" optional="YES" attributeType="String"/>
         <attribute name="researchObjective" optional="YES" attributeType="String"/>
     </entity>
 </model>

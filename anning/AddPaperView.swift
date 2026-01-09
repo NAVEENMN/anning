@@ -42,12 +42,12 @@ struct AddPaperView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        TextEditor(text: $abstractText)
-                            .frame(minHeight: 180)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.secondary.opacity(0.25))
-                            )
+                        MarkdownEditorBox(
+                            text: $abstractText,
+                            placeholder: "Abstract…",
+                            minHeight: 200,
+                            maxHeight: 300
+                        )
                     }
                     .padding(.top, 4)
                 } header: {

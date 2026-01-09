@@ -11,54 +11,16 @@ struct ResearchObjectivePanel: View {
     private var workspaces: FetchedResults<Workspace>
 
     @State private var draft: String = ""
-    @State private var isEditing = false
-    @FocusState private var isFocused: Bool
 
     private var workspace: Workspace? { workspaces.first }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Research Objective")
-                .font(.callout)
-                .fontWeight(.semibold)
-
-            if isEditing {
-                TextEditor(text: $draft)
-                    .focused($isFocused)
-                    .font(.callout)
-                    .frame(minHeight: 110, maxHeight: 160)
-                    .padding(6)
-                    .background(Color.black.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.20))
-                    )
-                    .onChange(of: isFocused) {
-                        if !isFocused {
-                            save()
-                            isEditing = false
-                        }
-                    }
-            } else {
-                Text(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     ? "Click to add your research objective…"
-                     : draft)
-                    .font(.callout)
-                    .foregroundStyle(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .primary)
-                    .lineLimit(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(Color.black.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.12))
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isEditing = true
-                        isFocused = true
-                    }
-            }
+        InlineMarkdownEditor(
+            title: "Research Objective",
+            text: $draft,
+            placeholder: "Click to add your research objective…"
+        ) {
+            save()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -70,9 +32,9 @@ struct ResearchObjectivePanel: View {
         .onChange(of: workspaces.count) {
             load()
         }
-        .onDisappear {
-            // safety: persist if user closes while editing
-            if isEditing { save() }
+        .onReceive(NotificationCenter.default.publisher(for: .anningProjectDidLoad)) { _ in
+            ensureWorkspace()
+            load()
         }
     }
 
@@ -81,6 +43,7 @@ struct ResearchObjectivePanel: View {
             let w = Workspace(context: viewContext)
             w.id = UUID()
             w.createdAt = Date()
+            w.projectTitle = ""
             w.researchObjective = ""
             do { try viewContext.save() }
             catch { print("Failed to create Workspace:", error) }

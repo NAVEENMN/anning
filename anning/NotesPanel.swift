@@ -102,17 +102,13 @@ struct NotesPanel: View {
 
             Divider()
 
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: binding(for: selected))
-                    .padding(10)
-
-                if binding(for: selected).wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Write notes for \(selected.title)…")
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 18)
-                }
-            }
+            MarkdownEditorBox(
+                text: binding(for: selected),
+                placeholder: "Write notes for \(selected.title)…",
+                minHeight: 220,
+                maxHeight: 500
+            )
+            .padding(10)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {

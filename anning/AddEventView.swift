@@ -38,12 +38,12 @@ struct AddEventView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        TextEditor(text: $summaryText)
-                            .frame(minHeight: 140)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.secondary.opacity(0.25))
-                            )
+                        MarkdownEditorBox(
+                            text: $summaryText,
+                            placeholder: "Describe this event…",
+                            minHeight: 180,
+                            maxHeight: 260
+                        )
                     }
                     .padding(.top, 4)
 

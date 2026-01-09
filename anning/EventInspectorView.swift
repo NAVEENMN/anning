@@ -29,8 +29,12 @@ struct EventInspectorView: View {
                 }
 
                 Section("Description") {
-                    TextEditor(text: descriptionBinding(for: event))
-                        .frame(minHeight: 260)
+                    MarkdownEditorBox(
+                        text: descriptionBinding(for: event),
+                        placeholder: "Write event description…",
+                        minHeight: 220,
+                        maxHeight: 420
+                    )
                 }
             }
         } else {

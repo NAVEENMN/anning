@@ -7,6 +7,11 @@ private enum LeftNavigatorTab: Hashable {
     case todos
 }
 
+private enum AppMode: Hashable {
+    case microscope
+    case person
+}
+
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
@@ -35,6 +40,7 @@ struct ContentView: View {
     private var todos: FetchedResults<TodoItem>
 
     @State private var navigatorTab: LeftNavigatorTab = .papers
+    @State private var appMode: AppMode = .microscope
 
     // Sheets
     @State private var isShowingAddPaper = false
@@ -83,6 +89,8 @@ struct ContentView: View {
                 .help(isInspectorVisible ? "Hide Inspector" : "Show Inspector")
 
                 Button {
+                    guard appMode == .microscope else { return }
+
                     switch navigatorTab {
                     case .papers:
                         isShowingAddPaper = true
@@ -94,7 +102,9 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .help(navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo"))
+                .help(appMode == .person ? "Unavailable in Person view" :
+                      (navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo")))
+                .disabled(appMode == .person)
             }
         }
         .sheet(isPresented: $isShowingAddPaper) {
@@ -128,36 +138,84 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            // Top navigator strip
-            HStack(spacing: 8) {
-                navButton(tab: .papers, systemImage: "folder", selectedSystemImage: "folder.fill", help: "Papers")
-                navButton(tab: .events, systemImage: "list.bullet", selectedSystemImage: "list.bullet", help: "Events")
-                navButton(tab: .todos, systemImage: "checkmark.circle", selectedSystemImage: "checkmark.circle.fill", help: "Todo")
+
+            // Top navigator strip (only in Microscope mode)
+            if appMode == .microscope {
+                HStack(spacing: 8) {
+                    navButton(tab: .papers, systemImage: "folder", selectedSystemImage: "folder.fill", help: "Papers")
+                    navButton(tab: .events, systemImage: "list.bullet", selectedSystemImage: "list.bullet", help: "Events")
+                    navButton(tab: .todos, systemImage: "checkmark.circle", selectedSystemImage: "checkmark.circle.fill", help: "Todo")
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+
+                Divider()
+
+                Group {
+                    if navigatorTab == .papers {
+                        papersList
+                    } else if navigatorTab == .events {
+                        eventsList
+                    } else {
+                        todosList
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Divider()
+            } else {
+                // Person mode: keep the list area empty
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
 
-            Divider()
+            if appMode == .microscope {
+                ResearchObjectivePanel()
+                    .frame(maxWidth: .infinity)
 
-            // Middle: scrollable list area
-            Group {
-                if navigatorTab == .papers {
-                    papersList
-                } else if navigatorTab == .events {
-                    eventsList
-                } else {
-                    todosList
+                Divider()
+            }
+
+            // Bottom-most: mode switcher (always visible)
+            modeSwitcher
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+        }
+    }
+
+    private var modeSwitcher: some View {
+        HStack(spacing: 10) {
+            modeButton(.microscope, systemImage: "doc.on.doc", help: "Papers")
+            modeButton(.person, systemImage: "person", help: "Person")
+            Spacer()
+        }
+    }
+
+    private func modeButton(_ mode: AppMode, systemImage: String, help: String) -> some View {
+        let selected = (appMode == mode)
+
+        return Button {
+            withAnimation {
+                appMode = mode
+
+                // When leaving microscope mode, clear selections to avoid weird state
+                if mode == .person {
+                    selectedPaperObjectID = nil
+                    selectedEventObjectID = nil
+                    selectedTodoObjectID = nil
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider()
-
-            // Bottom: sticky objective panel
-            ResearchObjectivePanel()
-                .frame(maxWidth: .infinity)
+        } label: {
+            Image(systemName: systemImage)
+                .foregroundStyle(selected ? .white : .secondary)
+                .frame(width: 30, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(selected ? Color.accentColor : Color.clear)
+                )
         }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private func navButton(tab: LeftNavigatorTab,
@@ -181,6 +239,7 @@ struct ContentView: View {
     }
 
     private func switchNavigator(to tab: LeftNavigatorTab) {
+        guard appMode == .microscope else { return }
         guard tab != navigatorTab else { return }
         navigatorTab = tab
         // Clear selection when switching modes (keeps center/inspector consistent)
@@ -267,26 +326,32 @@ struct ContentView: View {
 
     private var center: some View {
         Group {
-            if navigatorTab == .papers {
-                if let paper = selectedPaper {
-                    PersistentVSplitView(bottomFraction: $papersNotesFraction, minTop: 320, minBottom: 240) {
-                        PaperDetailView(paper: paper)
-                    } bottom: {
-                        NotesPanel(paper: paper)
-                    }
-                } else {
-                    Text("Select a paper")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else if navigatorTab == .events {
-                EventsCenterView(
-                    rows: eventsSorted,
-                    selection: eventSelectionSetBinding,
-                    sortAscending: $eventsSortAscending
-                )
+            if appMode == .person {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                TodoCenterView(rows: todos.map { TodoRow(item: $0) }, selection: todoSelectionSetBinding)
+                // Microscope mode
+                if navigatorTab == .papers {
+                    if let paper = selectedPaper {
+                        PersistentVSplitView(bottomFraction: $papersNotesFraction, minTop: 320, minBottom: 240) {
+                            PaperDetailView(paper: paper)
+                        } bottom: {
+                            NotesPanel(paper: paper)
+                        }
+                    } else {
+                        Text("Select a paper")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                } else if navigatorTab == .events {
+                    EventsCenterView(
+                        rows: eventsSorted,
+                        selection: eventSelectionSetBinding,
+                        sortAscending: $eventsSortAscending
+                    )
+                } else {
+                    TodoCenterView(rows: todos.map { TodoRow(item: $0) }, selection: todoSelectionSetBinding)
+                }
             }
         }
     }
@@ -295,14 +360,18 @@ struct ContentView: View {
 
     private var inspector: some View {
         Group {
-            if navigatorTab == .papers {
-                InspectorView(paper: selectedPaper)
-                    .id(selectedPaper?.objectID)
-            } else if navigatorTab == .events {
-                EventInspectorView(event: selectedEvent)
-                    .id(selectedEvent?.objectID)
-            } else {
+            if appMode == .person {
                 Color.clear
+            } else {
+                if navigatorTab == .papers {
+                    InspectorView(paper: selectedPaper)
+                        .id(selectedPaper?.objectID)
+                } else if navigatorTab == .events {
+                    EventInspectorView(event: selectedEvent)
+                        .id(selectedEvent?.objectID)
+                } else {
+                    Color.clear
+                }
             }
         }
     }
