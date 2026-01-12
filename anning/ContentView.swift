@@ -10,6 +10,7 @@ private enum LeftNavigatorTab: Hashable {
 private enum AppMode: Hashable {
     case microscope
     case person
+    case settings
 }
 
 struct ContentView: View {
@@ -41,6 +42,7 @@ struct ContentView: View {
 
     @State private var navigatorTab: LeftNavigatorTab = .papers
     @State private var appMode: AppMode = .microscope
+    @State private var lastNonSettingsMode: AppMode = .microscope
 
     // Sheets
     @State private var isShowingAddPaper = false
@@ -52,6 +54,7 @@ struct ContentView: View {
     @State private var selectedPaperObjectID: NSManagedObjectID? = nil
     @State private var selectedEventObjectID: NSManagedObjectID? = nil
     @State private var selectedTodoObjectID: NSManagedObjectID? = nil
+    @State private var settingsSelection: SettingsSection = .account
 
     // UI
     @State private var isSidebarVisible: Bool = true
@@ -69,7 +72,7 @@ struct ContentView: View {
             center
                 .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
 
-            if isInspectorVisible {
+            if isInspectorVisible && appMode == .microscope {
                 inspector
                     .frame(minWidth: 320, idealWidth: 360, maxWidth: 520)
             }
@@ -83,28 +86,42 @@ struct ContentView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { withAnimation { isInspectorVisible.toggle() } } label: {
-                    Image(systemName: "sidebar.trailing")
-                }
-                .help(isInspectorVisible ? "Hide Inspector" : "Show Inspector")
-
-                Button {
-                    guard appMode == .microscope else { return }
-
-                    switch navigatorTab {
-                    case .papers:
-                        isShowingAddPaper = true
-                    case .events:
-                        isShowingAddEvent = true
-                    case .todos:
-                        addTodoItem()
+                if appMode == .settings {
+                    Button {
+                        withAnimation {
+                            appMode = lastNonSettingsMode
+                        }
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
                     }
-                } label: {
-                    Image(systemName: "plus")
+                    .help("Back")
+                } else {
+                    // Inspector toggle only makes sense in microscope
+                    if appMode == .microscope {
+                        Button { withAnimation { isInspectorVisible.toggle() } } label: {
+                            Image(systemName: "sidebar.trailing")
+                        }
+                        .help(isInspectorVisible ? "Hide Inspector" : "Show Inspector")
+                    }
+
+                    // Plus disabled outside microscope, and not shown on settings
+                    Button {
+                        guard appMode == .microscope else { return }
+                        switch navigatorTab {
+                        case .papers:
+                            isShowingAddPaper = true
+                        case .events:
+                            isShowingAddEvent = true
+                        case .todos:
+                            addTodoItem()
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .help(appMode == .person ? "Unavailable in Person view" :
+                          (navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo")))
+                    .disabled(appMode != .microscope)
                 }
-                .help(appMode == .person ? "Unavailable in Person view" :
-                      (navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo")))
-                .disabled(appMode == .person)
             }
         }
         .sheet(isPresented: $isShowingAddPaper) {
@@ -164,8 +181,19 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Divider()
+            } else if appMode == .settings {
+                // Settings mode: show settings navigation inside the app sidebar
+                List(selection: $settingsSelection) {
+                    Label("@ Account", systemImage: "at")
+                        .tag(SettingsSection.account)
+
+                    Label("General", systemImage: "gearshape")
+                        .tag(SettingsSection.general)
+                }
+                .listStyle(.sidebar)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Person mode: keep the list area empty
+                // Person mode: empty list area
                 Spacer()
             }
 
@@ -187,8 +215,34 @@ struct ContentView: View {
         HStack(spacing: 10) {
             modeButton(.microscope, systemImage: "doc.on.doc", help: "Papers")
             modeButton(.person, systemImage: "person", help: "Person")
+
             Spacer()
+
+            settingsButton
         }
+    }
+
+    private var settingsButton: some View {
+        let selected = (appMode == .settings)
+
+        return Button {
+            withAnimation {
+                if appMode != .settings {
+                    lastNonSettingsMode = appMode
+                }
+                appMode = .settings
+            }
+        } label: {
+            Image(systemName: selected ? "gearshape.fill" : "gearshape")
+                .foregroundStyle(selected ? .white : .secondary)
+                .frame(width: 30, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(selected ? Color.accentColor : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Settings")
     }
 
     private func modeButton(_ mode: AppMode, systemImage: String, help: String) -> some View {
@@ -326,7 +380,9 @@ struct ContentView: View {
 
     private var center: some View {
         Group {
-            if appMode == .person {
+            if appMode == .settings {
+                SettingsView(selection: $settingsSelection)
+            } else if appMode == .person {
                 Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

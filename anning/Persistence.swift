@@ -32,6 +32,16 @@ struct PersistenceController {
         w.id = UUID()
         w.createdAt = Date()
         w.researchObjective = "Track the evolution of attention mechanisms and build a narrative system for papers."
+        
+        // Seed app settings
+        let settings = AppSettings(context: viewContext)
+        settings.id = UUID()
+        settings.createdAt = Date()
+        settings.name = ""
+        settings.email = ""
+        settings.bsky = ""
+        settings.defaultSavePath = ""
+        
         do {
             try viewContext.save()
         } catch {

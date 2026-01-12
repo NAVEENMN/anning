@@ -19,10 +19,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ask to load a project at launch
         DispatchQueue.main.async { [weak self] in
-            self?.promptOpenOnLaunch()
+            self?.bootstrapLaunch()
         }
+    }
+
+    private func bootstrapLaunch() {
+        let ctx = PersistenceController.shared.container.viewContext
+
+        let req = NSFetchRequest<Workspace>(entityName: "Workspace")
+        req.fetchLimit = 1
+        req.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+
+        let ws = (try? ctx.fetch(req))?.first
+        let title = (ws?.projectTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If a project already exists in the DB, continue where you left off (IDE-like)
+        if !title.isEmpty {
+            NotificationCenter.default.post(name: .anningProjectDidLoad, object: nil)
+            updateWindowTitle(title)
+            return
+        }
+
+        // Otherwise, first-time setup: require Open/New
+        promptOpenOnLaunch()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -244,6 +264,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.nameFieldStringValue = last.deletingPathExtension().lastPathComponent
         } else {
             panel.nameFieldStringValue = lastProjectTitle
+            
+            // Use global default save directory if set
+            let ctx = PersistenceController.shared.container.viewContext
+            let req = NSFetchRequest<AppSettings>(entityName: "AppSettings")
+            req.fetchLimit = 1
+            req.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+            if let s = try? ctx.fetch(req).first,
+               let path = s.defaultSavePath,
+               !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                panel.directoryURL = URL(fileURLWithPath: path, isDirectory: true)
+            }
         }
 
         if panel.runModal() == .OK, let url = panel.url {

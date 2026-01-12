@@ -37,4 +37,12 @@
         <attribute name="projectTitle" optional="YES" attributeType="String"/>
         <attribute name="researchObjective" optional="YES" attributeType="String"/>
     </entity>
+    <entity name="AppSettings" representedClassName="AppSettings" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="bsky" optional="YES" attributeType="String"/>
+        <attribute name="defaultSavePath" optional="YES" attributeType="String"/>
+    </entity>
 </model>
