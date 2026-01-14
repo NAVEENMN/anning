@@ -1,5 +1,6 @@
 import AppKit
 import CoreData
+import FirebaseAuth
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -18,35 +19,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.setValue(newValue, forKey: "lastProjectTitle") }
     }
 
+    private var didStartProjectFlow = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Start project flow only after a verified login
+        NotificationCenter.default.addObserver(
+            forName: .anningAuthDidLogin,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.bootstrapProjectIfNeeded()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .anningAuthDidLogout,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // allow project flow again when user logs in next time
+            self?.didStartProjectFlow = false
+        }
+
         DispatchQueue.main.async { [weak self] in
-            self?.bootstrapLaunch()
+            self?.bootstrapProjectIfNeeded()
         }
     }
 
-    private func bootstrapLaunch() {
-        let ctx = PersistenceController.shared.container.viewContext
+    private func bootstrapProjectIfNeeded() {
+        guard !didStartProjectFlow else { return }
 
-        let req = NSFetchRequest<Workspace>(entityName: "Workspace")
-        req.fetchLimit = 1
-        req.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+        // Only proceed if user exists AND is verified
+        if let u = Auth.auth().currentUser, u.isEmailVerified == true {
+            didStartProjectFlow = true
+            
+            let ctx = PersistenceController.shared.container.viewContext
+            let req = NSFetchRequest<Workspace>(entityName: "Workspace")
+            req.fetchLimit = 1
+            req.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
 
-        let ws = (try? ctx.fetch(req))?.first
-        let title = (ws?.projectTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let ws = (try? ctx.fetch(req))?.first
+            let title = (ws?.projectTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // If a project already exists in the DB, continue where you left off (IDE-like)
-        if !title.isEmpty {
-            NotificationCenter.default.post(name: .anningProjectDidLoad, object: nil)
-            updateWindowTitle(title)
-            return
+            // If a project already exists in the DB, continue where you left off (IDE-like)
+            if !title.isEmpty {
+                NotificationCenter.default.post(name: .anningProjectDidLoad, object: nil)
+                updateWindowTitle(title)
+                return
+            }
+
+            // Otherwise, first-time setup: require Open/New
+            promptOpenOnLaunch()
         }
-
-        // Otherwise, first-time setup: require Open/New
-        promptOpenOnLaunch()
+        // else: do nothing -> AuthGateView shows login/verify UI
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Always ask on quit (Save / Don't Save / Cancel)
+        // If user never got into the project flow, just quit quietly.
+        if !didStartProjectFlow {
+            return .terminateNow
+        }
+        
+        // Otherwise, ask to save (Save / Don't Save / Cancel)
         promptSaveOnQuit(sender: sender)
         return .terminateLater
     }
@@ -57,18 +90,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu actions
 
+    private func requireVerifiedLogin() -> Bool {
+        if let u = Auth.auth().currentUser, u.isEmailVerified { return true }
+        showSimpleMessage("Login required", "Please log in and verify your email to use projects.")
+        return false
+    }
+
     @discardableResult
     func menuNewProject() -> Bool {
+        guard requireVerifiedLogin() else { return false }
         return newProjectDialog(required: false)
     }
 
     @discardableResult
     func menuOpenProject() -> Bool {
+        guard requireVerifiedLogin() else { return false }
         return openProjectPanel(required: false)
     }
 
     @discardableResult
     func menuSave() -> Bool {
+        guard requireVerifiedLogin() else { return false }
         // Save = overwrite if we already have a path; otherwise behaves like Save As
         if let url = lastProjectURL {
             return writeProject(to: url)
@@ -81,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     func menuSaveAs() -> Bool {
+        guard requireVerifiedLogin() else { return false }
         var ok = false
         saveProjectPanel { ok = $0 }
         return ok

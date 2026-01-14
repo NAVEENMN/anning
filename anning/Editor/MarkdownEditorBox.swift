@@ -27,6 +27,7 @@ private struct RichTextEditorNSView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView(frame: .zero)
+        container.wantsLayer = true
 
         let toolbarHost = NSHostingView(rootView: ToolbarView { cmd in
             context.coordinator.apply(cmd)
@@ -37,7 +38,8 @@ private struct RichTextEditorNSView: NSViewRepresentable {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.borderType = .noBorder
-        scroll.drawsBackground = false
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .textBackgroundColor
         scroll.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(scroll)
 
@@ -47,12 +49,25 @@ private struct RichTextEditorNSView: NSViewRepresentable {
         tv.isAutomaticQuoteSubstitutionEnabled = false
         tv.isAutomaticDashSubstitutionEnabled = false
         tv.isAutomaticTextReplacementEnabled = false
-        tv.drawsBackground = false
+
+        // ✅ Make it readable in light/dark modes
+        tv.drawsBackground = true
+        tv.backgroundColor = .textBackgroundColor
+        tv.textColor = .labelColor
+        tv.insertionPointColor = .labelColor
+
         tv.textContainerInset = NSSize(width: 8, height: 8)
         tv.delegate = context.coordinator
 
         // Load rich content
-        tv.textStorage?.setAttributedString(RichTextStorage.decodeToNSAttributedString(storedText))
+        let decoded = RichTextStorage.decodeToNSAttributedString(storedText)
+        let mutable = NSMutableAttributedString(attributedString: decoded)
+        RichTextStorage.ensureDefaults(mutable)
+        tv.textStorage?.setAttributedString(mutable)
+
+        // Also set typing defaults so new text is visible
+        tv.typingAttributes[.font] = (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 13)
+        tv.typingAttributes[.foregroundColor] = (tv.typingAttributes[.foregroundColor] as? NSColor) ?? NSColor.labelColor
 
         scroll.documentView = tv
 
@@ -91,11 +106,17 @@ private struct RichTextEditorNSView: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.bindStoredText($storedText)
 
-        // If external storage changed (open project / new project), reload into text view
         if let tv = context.coordinator.textView {
             let currentEncoded = RichTextStorage.encodeRTFBase64(tv.attributedString())
             if currentEncoded != storedText {
-                tv.textStorage?.setAttributedString(RichTextStorage.decodeToNSAttributedString(storedText))
+                let decoded = RichTextStorage.decodeToNSAttributedString(storedText)
+                let mutable = NSMutableAttributedString(attributedString: decoded)
+                RichTextStorage.ensureDefaults(mutable)
+                tv.textStorage?.setAttributedString(mutable)
+
+                // keep typing attributes readable
+                tv.typingAttributes[.foregroundColor] = (tv.typingAttributes[.foregroundColor] as? NSColor) ?? NSColor.labelColor
+                tv.typingAttributes[.font] = (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 13)
             }
         }
 
@@ -106,6 +127,9 @@ private struct RichTextEditorNSView: NSViewRepresentable {
         weak var textView: NSTextView?
         weak var placeholderLabel: NSTextField?
         private var storedBinding: Binding<String>?
+
+        // color panel state
+        private var colorTargetRange: NSRange = NSRange(location: 0, length: 0)
 
         func bindStoredText(_ b: Binding<String>) { storedBinding = b }
 
@@ -133,6 +157,9 @@ private struct RichTextEditorNSView: NSViewRepresentable {
             case .numbered: applyList(tv, numbered: true)
             case .link: applyLink(tv)
             case .code: applyCodeBlock(tv)
+            case .fontSmaller: adjustFontSize(tv, delta: -1)
+            case .fontLarger: adjustFontSize(tv, delta: 1)
+            case .textColor: openColorPanel(tv)
             }
 
             // Update storage after command
@@ -174,19 +201,16 @@ private struct RichTextEditorNSView: NSViewRepresentable {
             let existing = storage.attribute(.underlineStyle, at: probeLoc, effectiveRange: nil) as? Int
             let shouldRemove = (existing ?? 0) != 0
 
-            let applyRange = (range.length == 0 && storage.length > 0) ? NSRange(location: probeLoc, length: 0) : range
-
-            if applyRange.length == 0 {
-                // toggle typing attributes
+            if range.length == 0 {
                 tv.typingAttributes[.underlineStyle] = shouldRemove ? nil : NSUnderlineStyle.single.rawValue
                 return
             }
 
             storage.beginEditing()
             if shouldRemove {
-                storage.removeAttribute(.underlineStyle, range: applyRange)
+                storage.removeAttribute(.underlineStyle, range: range)
             } else {
-                storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: applyRange)
+                storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
             }
             storage.endEditing()
         }
@@ -262,8 +286,6 @@ private struct RichTextEditorNSView: NSViewRepresentable {
 
             let ps = NSMutableParagraphStyle()
             ps.paragraphSpacing = 6
-            ps.headIndent = 0
-            ps.firstLineHeadIndent = 0
 
             storage.beginEditing()
             storage.addAttribute(.font, value: font, range: range)
@@ -271,10 +293,74 @@ private struct RichTextEditorNSView: NSViewRepresentable {
             storage.addAttribute(.paragraphStyle, value: ps, range: range)
             storage.endEditing()
         }
+
+        private func adjustFontSize(_ tv: NSTextView, delta: CGFloat) {
+            let range = tv.selectedRange()
+            let minSize: CGFloat = 10
+            let maxSize: CGFloat = 24
+
+            if range.length == 0 {
+                let font = (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 13)
+                let newSize = min(max(font.pointSize + delta, minSize), maxSize)
+                tv.typingAttributes[.font] = font.withSize(newSize)
+                return
+            }
+
+            guard let storage = tv.textStorage else { return }
+            storage.beginEditing()
+            storage.enumerateAttribute(.font, in: range, options: []) { value, subRange, _ in
+                let font = (value as? NSFont) ?? NSFont.systemFont(ofSize: 13)
+                let newSize = min(max(font.pointSize + delta, minSize), maxSize)
+                storage.addAttribute(.font, value: font.withSize(newSize), range: subRange)
+            }
+            storage.endEditing()
+        }
+
+        // MARK: Color
+
+        private func openColorPanel(_ tv: NSTextView) {
+            colorTargetRange = tv.selectedRange()
+
+            let panel = NSColorPanel.shared
+            panel.setTarget(self)
+            panel.setAction(#selector(colorChanged(_:)))
+            panel.isContinuous = true
+
+            // seed with current typing color if available
+            if let c = tv.typingAttributes[.foregroundColor] as? NSColor {
+                panel.color = c
+            } else {
+                panel.color = .labelColor
+            }
+
+            panel.makeKeyAndOrderFront(nil)
+        }
+
+        @objc private func colorChanged(_ sender: NSColorPanel) {
+            guard let tv = textView, let storage = tv.textStorage else { return }
+            let color = sender.color
+
+            if colorTargetRange.length == 0 {
+                tv.typingAttributes[.foregroundColor] = color
+                return
+            }
+
+            storage.beginEditing()
+            storage.addAttribute(.foregroundColor, value: color, range: colorTargetRange)
+            storage.endEditing()
+
+            // persist
+            let encoded = RichTextStorage.encodeRTFBase64(tv.attributedString())
+            storedBinding?.wrappedValue = encoded
+        }
     }
 }
 
-private enum RichCmd: Equatable { case bold, italic, underline, numbered, bullet, link, code }
+private enum RichCmd: Equatable {
+    case bold, italic, underline, numbered, bullet, link, code
+    case fontSmaller, fontLarger
+    case textColor
+}
 
 private struct ToolbarView: View {
     let onCommand: (RichCmd) -> Void
@@ -284,6 +370,20 @@ private struct ToolbarView: View {
             Button("B") { onCommand(.bold) }.buttonStyle(.borderless)
             Button("I") { onCommand(.italic) }.buttonStyle(.borderless)
             Button("U") { onCommand(.underline) }.buttonStyle(.borderless)
+
+            Divider().frame(height: 18)
+
+            Button { onCommand(.textColor) } label: { Image(systemName: "paintpalette") }
+                .buttonStyle(.borderless)
+                .help("Text color")
+
+            Button { onCommand(.fontSmaller) } label: { Image(systemName: "textformat.size.smaller") }
+                .buttonStyle(.borderless)
+                .help("Smaller text")
+
+            Button { onCommand(.fontLarger) } label: { Image(systemName: "textformat.size.larger") }
+                .buttonStyle(.borderless)
+                .help("Larger text")
 
             Divider().frame(height: 18)
 

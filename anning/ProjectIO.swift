@@ -7,9 +7,11 @@ struct ProjectFile: Codable {
     var version: Int = 1
     var exportedAt: Date
     var workspaces: [WorkspaceDTO]
+    var paperGroups: [PaperGroupDTO]
     var papers: [PaperDTO]
     var events: [EventDTO]
     var todos: [TodoDTO]
+    var definitions: [DefinitionDTO]
 }
 
 struct WorkspaceDTO: Codable {
@@ -29,7 +31,18 @@ struct PaperDTO: Codable {
     var notesJSON: String?
     var paperType: String?
     var createdAt: Date?
+    var sortIndex: Int32?
+    var groupID: UUID?
     // We do NOT persist localPDFPath (machine-specific cache)
+}
+
+struct PaperGroupDTO: Codable {
+    var id: UUID?
+    var createdAt: Date?
+    var name: String?
+    var orderIndex: Int32?
+    var isCollapsed: Bool?
+    var parentID: UUID?
 }
 
 struct EventDTO: Codable {
@@ -51,12 +64,25 @@ struct TodoDTO: Codable {
     var createdAt: Date?
 }
 
+struct DefinitionDTO: Codable {
+    var id: UUID?
+    var createdAt: Date?
+    var term: String?
+    var definitionText: String?
+}
+
 // MARK: - Export / Import
 
 enum ProjectIO {
     static func exportJSON(context: NSManagedObjectContext) throws -> Data {
         let fetchWorkspaces = NSFetchRequest<Workspace>(entityName: "Workspace")
         fetchWorkspaces.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+
+        let fetchGroups = NSFetchRequest<PaperGroup>(entityName: "PaperGroup")
+        fetchGroups.sortDescriptors = [
+            NSSortDescriptor(key: "orderIndex", ascending: true),
+            NSSortDescriptor(key: "createdAt", ascending: true)
+        ]
 
         let fetchPapers = NSFetchRequest<Paper>(entityName: "Paper")
         fetchPapers.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
@@ -76,6 +102,17 @@ enum ProjectIO {
             )
         }
 
+        let groups = try context.fetch(fetchGroups).map {
+            PaperGroupDTO(
+                id: $0.id,
+                createdAt: $0.createdAt,
+                name: $0.name,
+                orderIndex: $0.orderIndex,
+                isCollapsed: $0.isCollapsed,
+                parentID: $0.parent?.id
+            )
+        }
+
         let papers = try context.fetch(fetchPapers).map {
             PaperDTO(
                 id: $0.id,
@@ -86,7 +123,9 @@ enum ProjectIO {
                 authorsJSON: $0.authorsJSON,
                 notesJSON: $0.notesJSON,
                 paperType: $0.paperType,
-                createdAt: $0.createdAt
+                createdAt: $0.createdAt,
+                sortIndex: $0.sortIndex,
+                groupID: $0.group?.id
             )
         }
 
@@ -113,12 +152,26 @@ enum ProjectIO {
             )
         }
 
+        let fetchDefinitions = NSFetchRequest<DefinitionItem>(entityName: "DefinitionItem")
+        fetchDefinitions.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+
+        let defs = try context.fetch(fetchDefinitions).map {
+            DefinitionDTO(
+                id: $0.id,
+                createdAt: $0.createdAt,
+                term: $0.term,
+                definitionText: $0.definitionText
+            )
+        }
+
         let file = ProjectFile(
             exportedAt: Date(),
             workspaces: ws,
+            paperGroups: groups,
             papers: papers,
             events: events,
-            todos: todos
+            todos: todos,
+            definitions: defs
         )
 
         let enc = JSONEncoder()
@@ -151,6 +204,30 @@ enum ProjectIO {
             obj.researchObjective = ""
         }
 
+        // PaperGroups (create first, resolve parent links after)
+        var groupByID: [UUID: PaperGroup] = [:]
+        for g in file.paperGroups {
+            let obj = PaperGroup(context: context)
+            let id = g.id ?? UUID()
+            obj.id = id
+            obj.createdAt = g.createdAt ?? Date()
+            obj.name = g.name ?? "New Group"
+            obj.orderIndex = g.orderIndex ?? 0
+            obj.isCollapsed = g.isCollapsed ?? false
+            groupByID[id] = obj
+        }
+
+        // Resolve parent links
+        for g in file.paperGroups {
+            guard
+                let gid = g.id,
+                let parentID = g.parentID,
+                let group = groupByID[gid],
+                let parent = groupByID[parentID]
+            else { continue }
+            group.parent = parent
+        }
+
         for p in file.papers {
             let obj = Paper(context: context)
             obj.id = p.id ?? UUID()
@@ -163,6 +240,12 @@ enum ProjectIO {
             obj.paperType = p.paperType ?? "empirical work"
             obj.createdAt = p.createdAt ?? Date()
             obj.localPDFPath = nil // force re-download cache on this machine
+            obj.sortIndex = p.sortIndex ?? 0
+            if let gid = p.groupID, let group = groupByID[gid] {
+                obj.group = group
+            } else {
+                obj.group = nil
+            }
         }
 
         for e in file.events {
@@ -186,6 +269,14 @@ enum ProjectIO {
             obj.createdAt = t.createdAt ?? Date()
         }
 
+        for d in file.definitions {
+            let obj = DefinitionItem(context: context)
+            obj.id = d.id ?? UUID()
+            obj.createdAt = d.createdAt ?? Date()
+            obj.term = d.term ?? "new term"
+            obj.definitionText = d.definitionText ?? ""
+        }
+
         try context.save()
     }
 
@@ -196,8 +287,10 @@ enum ProjectIO {
 
     static func wipeAll(context: NSManagedObjectContext) throws {
         try batchDelete(entityName: "Paper", context: context)
+        try batchDelete(entityName: "PaperGroup", context: context)
         try batchDelete(entityName: "Event", context: context)
         try batchDelete(entityName: "TodoItem", context: context)
+        try batchDelete(entityName: "DefinitionItem", context: context)
         try batchDelete(entityName: "Workspace", context: context)
     }
 

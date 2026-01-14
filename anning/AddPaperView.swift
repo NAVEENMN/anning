@@ -5,16 +5,14 @@ struct AddPaperView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
 
-    /// If non-nil, we are editing an existing paper.
+    /// If non-nil, we are editing an existing paper (we'll re-fetch from server on Update).
     let paperToEdit: Paper?
 
-    @State private var title: String = ""
-    @State private var shortTitle: String = ""
-    @State private var abstractText: String = ""
     @State private var arxivPDFURL: String = ""
-    @State private var paperType: PaperType = .empiricalWork
-    @State private var authors: [AuthorInput] = [AuthorInput(firstName: "", lastName: "")]
     @State private var errorMessage: String?
+
+    @State private var isBusy: Bool = false
+    @State private var statusText: String = ""
 
     init(paperToEdit: Paper? = nil) {
         self.paperToEdit = paperToEdit
@@ -23,68 +21,18 @@ struct AddPaperView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                Section {
-                    TextField("Paper title", text: $title)
-                    TextField("Short title (max 5 words)", text: $shortTitle)
-
-                    Picker("Type", selection: $paperType) {
-                        ForEach(PaperType.allCases) { t in
-                            Text(t.displayName).tag(t)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
+                Section("Paper") {
                     TextField("arXiv PDF URL (https://arxiv.org/pdf/<id>.pdf)", text: $arxivPDFURL)
                         .autocorrectionDisabled()
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Abstract")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        MarkdownEditorBox(
-                            text: $abstractText,
-                            placeholder: "Abstract…",
-                            minHeight: 200,
-                            maxHeight: 300
-                        )
-                    }
-                    .padding(.top, 4)
-                } header: {
-                    Text("Paper")
                 }
 
-                Section {
-                    HStack {
-                        Text("Authors")
-                        Spacer()
-                        Button {
-                            authors.append(AuthorInput(firstName: "", lastName: ""))
-                        } label: {
-                            Image(systemName: "plus.circle")
+                if isBusy {
+                    Section {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text(statusText.isEmpty ? "Fetching paper details…" : statusText)
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Add author")
-                    }
-
-                    ForEach($authors) { $author in
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                TextField("Last name", text: $author.lastName)
-                                TextField("First name", text: $author.firstName)
-                            }
-
-                            Spacer()
-
-                            Button {
-                                deleteAuthor(author.id)
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Remove author")
-                        }
-                        .padding(.vertical, 4)
                     }
                 }
 
@@ -100,10 +48,13 @@ struct AddPaperView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
+                    .disabled(isBusy)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(paperToEdit == nil ? "Save" : "Update") { saveOrUpdate() }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(paperToEdit == nil ? "Save" : "Update") {
+                    Task { await saveOrUpdateFromServer() }
+                }
+                .disabled(isBusy || arxivPDFURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .onAppear { loadIfEditing() }
@@ -111,119 +62,160 @@ struct AddPaperView: View {
 
     private func loadIfEditing() {
         guard let p = paperToEdit else { return }
-
-        title = p.title ?? ""
-        shortTitle = p.shortTitle ?? ""
-        abstractText = p.abstractText ?? ""
         arxivPDFURL = p.arxivPDFURL ?? ""
-        paperType = paperTypeFromStored(p.paperType)
-
-        if let json = p.authorsJSON, let data = json.data(using: .utf8),
-           let decoded = try? JSONDecoder().decode([AuthorInput].self, from: data),
-           !decoded.isEmpty {
-            authors = decoded
-        } else {
-            authors = [AuthorInput(firstName: "", lastName: "")]
-        }
     }
 
-    private func deleteAuthor(_ id: UUID) {
-        authors.removeAll { $0.id == id }
-        if authors.isEmpty {
-            authors = [AuthorInput(firstName: "", lastName: "")]
-        }
-    }
-
-    private func saveOrUpdate() {
+    private func saveOrUpdateFromServer() async {
         errorMessage = nil
 
-        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanedShort = shortTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanedAbstract = abstractText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // arXiv only
-        let normalizedURL = normalizeArxivPDFURL(arxivPDFURL)
-        let cleanedURL = normalizedURL.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !cleanedTitle.isEmpty else {
-            errorMessage = "Paper title is required."
-            return
-        }
-
-        if !cleanedShort.isEmpty {
-            let wordCount = cleanedShort.split { $0.isWhitespace || $0.isNewline }.count
-            if wordCount > 5 {
-                errorMessage = "Short title must be 5 words or fewer."
-                return
-            }
-        }
+        let normalized = normalizeArxivPDFURL(arxivPDFURL)
+        let cleanedURL = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !cleanedURL.isEmpty else {
-            errorMessage = "arXiv PDF URL is required (arXiv-only for now)."
+            errorMessage = "arXiv PDF URL is required."
             return
         }
-
         guard isValidArxivPDFURL(cleanedURL) else {
             errorMessage = "Only arXiv PDF URLs are accepted for now. Use: https://arxiv.org/pdf/<id>.pdf"
             return
         }
 
-        let cleanedAuthors = authors
-            .map {
-                AuthorInput(
-                    id: $0.id,
-                    firstName: $0.firstName.trimmingCharacters(in: .whitespacesAndNewlines),
-                    lastName: $0.lastName.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
-            }
-            .filter { !$0.firstName.isEmpty || !$0.lastName.isEmpty }
-
-        let authorsJSON: String
-        do {
-            let data = try JSONEncoder().encode(cleanedAuthors)
-            authorsJSON = String(data: data, encoding: .utf8) ?? "[]"
-        } catch {
-            errorMessage = "Failed to encode authors."
-            return
+        await MainActor.run {
+            isBusy = true
+            statusText = "Contacting server…"
         }
 
-        withAnimation {
-            let paper: Paper
-            let isEditing = (paperToEdit != nil)
+        do {
+            let payload = try await PaperDetailsAPI.fetchPaperDetails(pdfURL: cleanedURL)
 
-            if let existing = paperToEdit {
-                paper = existing
-            } else {
-                paper = Paper(context: viewContext)
-                paper.id = UUID()
-                paper.createdAt = Date()
+            await MainActor.run {
+                statusText = "Saving to database…"
             }
 
-            // If editing and URL changed, invalidate cached PDF
-            if isEditing {
-                let previousURL = normalizeArxivPDFURL(paper.arxivPDFURL ?? "")
-                if previousURL != cleanedURL {
-                    if let path = paper.localPDFPath, FileManager.default.fileExists(atPath: path) {
-                        try? FileManager.default.removeItem(atPath: path)
-                    }
-                    paper.localPDFPath = nil
+            try await MainActor.run {
+                let paper: Paper
+                let isEditing = (paperToEdit != nil)
+
+                if let existing = paperToEdit {
+                    paper = existing
+                } else {
+                    paper = Paper(context: viewContext)
+                    paper.id = UUID()
+                    paper.createdAt = Date()
+                    paper.sortIndex = Int32(Int(Date().timeIntervalSince1970))
+                    paper.group = nil
                 }
-            }
 
-            paper.title = cleanedTitle
-            paper.shortTitle = cleanedShort
-            paper.abstractText = cleanedAbstract
-            paper.arxivPDFURL = cleanedURL
-            paper.paperType = paperType.rawValue
-            paper.authorsJSON = authorsJSON
+                // If URL changed, clear cached PDF
+                if isEditing {
+                    let prev = normalizeArxivPDFURL(paper.arxivPDFURL ?? "")
+                    if prev != cleanedURL {
+                        if let path = paper.localPDFPath, FileManager.default.fileExists(atPath: path) {
+                            try? FileManager.default.removeItem(atPath: path)
+                        }
+                        paper.localPDFPath = nil
+                    }
+                }
 
-            do {
+                applyServerPaper(payload.paper, to: paper)
+
                 try viewContext.save()
                 dismiss()
-            } catch {
-                let nsError = error as NSError
-                errorMessage = "Save failed: \(nsError.localizedDescription)"
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
             }
         }
+
+        await MainActor.run {
+            isBusy = false
+            statusText = ""
+        }
+    }
+
+    // MARK: - Mapping server -> Core Data
+
+    private func applyServerPaper(_ s: PaperDetailsAPI.PaperInfo, to paper: Paper) {
+        paper.arxivPDFURL = s.pdf_url
+
+        let title = (s.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        paper.title = title.isEmpty ? "Untitled" : title
+        paper.shortTitle = paper.title // you can add a better short-title heuristic later
+
+        // Abstract: store as RTF-base64 so it renders "formatted" in your RichText editor box.
+        let abs = (s.abstract ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        paper.abstractText = RichTextStorage.encodeRTFBase64(NSAttributedString(string: abs))
+
+        // Authors: turn "A, B, C" into authorsJSON
+        paper.authorsJSON = encodeAuthorsJSON(from: s.authors)
+
+        // Paper type: keep default empirical work for now
+        if (paper.paperType ?? "").isEmpty {
+            paper.paperType = PaperType.empiricalWork.rawValue
+        }
+
+        // Seed notes JSON sections (only fill if empty so user edits don't get overwritten on Update)
+        var notes = decodeNotes(from: paper.notesJSON)
+
+        setIfEmpty(&notes, key: NotesSection.motivation.rawValue, value: s.motivation)
+        setIfEmpty(&notes, key: NotesSection.experimentSetup.rawValue, value: s.experiment_setup)
+        setIfEmpty(&notes, key: NotesSection.experimentMethod.rawValue, value: s.methodology)
+        setIfEmpty(&notes, key: NotesSection.results.rawValue, value: s.result)
+        setIfEmpty(&notes, key: NotesSection.conclusion.rawValue, value: s.conclusion)
+
+        if let survey = s.survey, survey.lowercased() != "n/a" {
+            setIfEmpty(&notes, key: NotesSection.surveyDetails.rawValue, value: survey)
+        }
+
+        // Store server metadata (and embedding) without changing Core Data schema
+        if let meta = try? JSONEncoder().encode(s),
+           let metaStr = String(data: meta, encoding: .utf8) {
+            notes["_server_paper_json"] = metaStr
+        }
+
+        if let emb = s.embedding_vector,
+           let data = try? JSONEncoder().encode(emb),
+           let embStr = String(data: data, encoding: .utf8) {
+            notes["_embedding_vector_json"] = embStr
+        }
+
+        paper.notesJSON = encodeNotes(notes)
+    }
+
+    private func encodeAuthorsJSON(from authorsCSV: String?) -> String {
+        let raw = (authorsCSV ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return "[]" }
+
+        let names = raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let arr = names.map { AuthorInput(firstName: "", lastName: $0) } // simplest + safe
+
+        if let data = try? JSONEncoder().encode(arr),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return "[]"
+    }
+
+    private func decodeNotes(from json: String?) -> [String: String] {
+        guard
+            let json,
+            let data = json.data(using: .utf8),
+            let obj = try? JSONSerialization.jsonObject(with: data),
+            let dict = obj as? [String: String]
+        else { return [:] }
+        return dict
+    }
+
+    private func encodeNotes(_ dict: [String: String]) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: dict, options: [])
+        return data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+
+    private func setIfEmpty(_ dict: inout [String: String], key: String, value: String?) {
+        let v = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else { return }
+        let existing = (dict[key] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if existing.isEmpty { dict[key] = v }
     }
 }

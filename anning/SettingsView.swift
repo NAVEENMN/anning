@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreData
 import AppKit
+import FirebaseAuth
 
 // Shared with ContentView
 enum SettingsSection: Hashable {
@@ -10,6 +11,7 @@ enum SettingsSection: Hashable {
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var auth: AuthViewModel
     @Binding var selection: SettingsSection
 
     @FetchRequest(
@@ -22,11 +24,15 @@ struct SettingsView: View {
 
     @State private var nameDraft = ""
     @State private var emailDraft = ""
-    @State private var bskyDraft = ""
     @State private var savePathDraft = ""
 
     @FocusState private var focusedField: Field?
-    private enum Field: Hashable { case name, email, bsky, savePath }
+    private enum Field: Hashable { case name, email, savePath }
+
+    private var appVersionLabel: String {
+        let v = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0"
+        return "Anning v\(v)"
+    }
 
     var body: some View {
         ScrollView {
@@ -56,20 +62,41 @@ struct SettingsView: View {
     }
 
     private var accountPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let user = Auth.auth().currentUser
+        let name = user?.displayName ?? ""
+        let email = user?.email ?? ""
+
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Account")
                 .font(.title2)
                 .fontWeight(.semibold)
 
             Form {
-                TextField("Name", text: $nameDraft)
-                    .focused($focusedField, equals: .name)
+                LabeledContent("Name") {
+                    Text(name.isEmpty ? "—" : name)
+                        .textSelection(.enabled)
+                }
+                
+                LabeledContent("Email") {
+                    Text(email.isEmpty ? "—" : email)
+                        .textSelection(.enabled)
+                }
+                
+                LabeledContent("User ID") {
+                    Text(user?.uid ?? "—")
+                        .textSelection(.enabled)
+                        .font(.system(.body, design: .monospaced))
+                }
+            }
+            .frame(maxWidth: 560)
 
-                TextField("Email", text: $emailDraft)
-                    .focused($focusedField, equals: .email)
-
-                TextField("bsky", text: $bskyDraft)
-                    .focused($focusedField, equals: .bsky)
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    auth.signOut()
+                } label: {
+                    Text("Log out")
+                }
             }
             .frame(maxWidth: 560)
         }
@@ -82,6 +109,11 @@ struct SettingsView: View {
                 .fontWeight(.semibold)
 
             Form {
+                LabeledContent("Version") {
+                    Text(appVersionLabel)
+                        .foregroundStyle(.secondary)
+                }
+
                 HStack(spacing: 10) {
                     TextField("Save path", text: $savePathDraft)
                         .focused($focusedField, equals: .savePath)
@@ -114,15 +146,12 @@ struct SettingsView: View {
         guard let s else { return }
         nameDraft = s.name ?? ""
         emailDraft = s.email ?? ""
-        bskyDraft = s.bsky ?? ""
         savePathDraft = s.defaultSavePath ?? ""
     }
 
     private func persist() {
         guard let s else { return }
-        s.name = nameDraft
-        s.email = emailDraft
-        s.bsky = bskyDraft
+        // name and email now come from Firebase, only persist local settings
         s.defaultSavePath = savePathDraft
         try? viewContext.save()
     }

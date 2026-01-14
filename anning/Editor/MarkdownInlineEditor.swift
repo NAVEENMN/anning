@@ -44,25 +44,32 @@ struct InlineMarkdownEditor: View {
                 MarkdownEditorNSView(text: $text, isEditing: $isEditing) {
                     onCommit()
                 }
-                .frame(minHeight: 150, maxHeight: 220)
+                .frame(minHeight: 150, maxHeight: .infinity)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
                 )
             } else {
-                Text(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? placeholder : text)
-                    .font(.callout)
-                    .foregroundStyle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .primary)
-                    .lineLimit(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(Color.black.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { isEditing = true }
+                ZStack(alignment: .topLeading) {
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(placeholder)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(text)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(Color.black.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { isEditing = true }
             }
         }
     }

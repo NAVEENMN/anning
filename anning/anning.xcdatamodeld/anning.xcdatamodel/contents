@@ -21,7 +21,19 @@
         <attribute name="notesJSON" optional="YES" attributeType="String"/>
         <attribute name="paperType" optional="YES" attributeType="String"/>
         <attribute name="shortTitle" optional="YES" attributeType="String"/>
+        <attribute name="sortIndex" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PaperGroup" inverseName="papers" inverseEntity="PaperGroup"/>
+    </entity>
+    <entity name="PaperGroup" representedClassName="PaperGroup" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isCollapsed" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="orderIndex" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="children" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PaperGroup" inverseName="parent" inverseEntity="PaperGroup"/>
+        <relationship name="papers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Paper" inverseName="group" inverseEntity="Paper"/>
+        <relationship name="parent" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PaperGroup" inverseName="children" inverseEntity="PaperGroup"/>
     </entity>
     <entity name="TodoItem" representedClassName="TodoItem" syncable="YES" codeGenerationType="class">
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
@@ -44,5 +56,11 @@
         <attribute name="email" optional="YES" attributeType="String"/>
         <attribute name="bsky" optional="YES" attributeType="String"/>
         <attribute name="defaultSavePath" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="DefinitionItem" representedClassName="DefinitionItem" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="term" optional="YES" attributeType="String"/>
+        <attribute name="definitionText" optional="YES" attributeType="String"/>
     </entity>
 </model>

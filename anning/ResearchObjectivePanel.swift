@@ -24,7 +24,7 @@ struct ResearchObjectivePanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(minHeight: 170)
+        .frame(minHeight: 170, alignment: .topLeading)
         .onAppear {
             ensureWorkspace()
             load()

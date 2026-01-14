@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseCore
 import CoreData
 
 @main
@@ -14,9 +15,13 @@ struct anningApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        FirebaseApp.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AuthGateView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
         .windowToolbarStyle(.unified)

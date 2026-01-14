@@ -5,6 +5,7 @@ private enum LeftNavigatorTab: Hashable {
     case papers
     case events
     case todos
+    case definitions
 }
 
 private enum AppMode: Hashable {
@@ -15,13 +16,6 @@ private enum AppMode: Hashable {
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-
-    // Papers
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Paper.createdAt, ascending: false)],
-        animation: .default
-    )
-    private var papers: FetchedResults<Paper>
 
     // Events (base fetch ascending; we'll sort in-memory for the toggle)
     @FetchRequest(
@@ -40,6 +34,13 @@ struct ContentView: View {
     )
     private var todos: FetchedResults<TodoItem>
 
+    // Definitions
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \DefinitionItem.createdAt, ascending: false)],
+        animation: .default
+    )
+    private var definitions: FetchedResults<DefinitionItem>
+
     @State private var navigatorTab: LeftNavigatorTab = .papers
     @State private var appMode: AppMode = .microscope
     @State private var lastNonSettingsMode: AppMode = .microscope
@@ -54,6 +55,7 @@ struct ContentView: View {
     @State private var selectedPaperObjectID: NSManagedObjectID? = nil
     @State private var selectedEventObjectID: NSManagedObjectID? = nil
     @State private var selectedTodoObjectID: NSManagedObjectID? = nil
+    @State private var selectedDefinitionObjectID: NSManagedObjectID? = nil
     @State private var settingsSelection: SettingsSection = .account
 
     // UI
@@ -62,19 +64,38 @@ struct ContentView: View {
     @State private var eventsSortAscending: Bool = true
     @SceneStorage("papersNotesFraction_v2") private var papersNotesFraction: Double = 0.50
 
+    // Toast
+    @State private var toastMessage: String? = nil
+    @State private var toastVisible: Bool = false
+
     var body: some View {
-        HSplitView {
-            if isSidebarVisible {
-                sidebar
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 360)
+        ZStack(alignment: .top) {
+            HSplitView {
+                if isSidebarVisible {
+                    sidebar
+                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 360)
+                }
+
+                center
+                    .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
+
+                if isInspectorVisible && appMode == .microscope {
+                    inspector
+                        .frame(minWidth: 320, idealWidth: 360, maxWidth: 520)
+                }
             }
 
-            center
-                .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
-
-            if isInspectorVisible && appMode == .microscope {
-                inspector
-                    .frame(minWidth: 320, idealWidth: 360, maxWidth: 520)
+            if toastVisible, let msg = toastMessage {
+                Text(msg)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .shadow(radius: 8)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .toolbar {
@@ -114,12 +135,14 @@ struct ContentView: View {
                             isShowingAddEvent = true
                         case .todos:
                             addTodoItem()
+                        case .definitions:
+                            addDefinitionItem()
                         }
                     } label: {
                         Image(systemName: "plus")
                     }
                     .help(appMode == .person ? "Unavailable in Person view" :
-                          (navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : "Add Todo")))
+                          (navigatorTab == .papers ? "Add Paper" : (navigatorTab == .events ? "Add Event" : (navigatorTab == .todos ? "Add Todo" : "Add Definition"))))
                     .disabled(appMode != .microscope)
                 }
             }
@@ -127,7 +150,7 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingAddPaper) {
             AddPaperView()
                 .environment(\.managedObjectContext, viewContext)
-                .frame(minWidth: 700, minHeight: 650)
+                .frame(minWidth: 560, minHeight: 320)
         }
         .sheet(isPresented: $isShowingAddEvent) {
             AddEventView()
@@ -137,7 +160,7 @@ struct ContentView: View {
         .sheet(item: $paperBeingEdited) { paper in
             AddPaperView(paperToEdit: paper)
                 .environment(\.managedObjectContext, viewContext)
-                .frame(minWidth: 700, minHeight: 650)
+                .frame(minWidth: 560, minHeight: 320)
         }
         .sheet(item: $eventBeingEdited) { e in
             AddEventView(eventToEdit: e)
@@ -162,6 +185,7 @@ struct ContentView: View {
                     navButton(tab: .papers, systemImage: "folder", selectedSystemImage: "folder.fill", help: "Papers")
                     navButton(tab: .events, systemImage: "list.bullet", selectedSystemImage: "list.bullet", help: "Events")
                     navButton(tab: .todos, systemImage: "checkmark.circle", selectedSystemImage: "checkmark.circle.fill", help: "Todo")
+                    navButton(tab: .definitions, systemImage: "brain", selectedSystemImage: "brain.fill", help: "Definitions")
                     Spacer()
                 }
                 .padding(.horizontal, 10)
@@ -174,6 +198,8 @@ struct ContentView: View {
                         papersList
                     } else if navigatorTab == .events {
                         eventsList
+                    } else if navigatorTab == .definitions {
+                        definitionsList
                     } else {
                         todosList
                     }
@@ -184,7 +210,7 @@ struct ContentView: View {
             } else if appMode == .settings {
                 // Settings mode: show settings navigation inside the app sidebar
                 List(selection: $settingsSelection) {
-                    Label("@ Account", systemImage: "at")
+                    Label("Account", systemImage: "at")
                         .tag(SettingsSection.account)
 
                     Label("General", systemImage: "gearshape")
@@ -214,7 +240,17 @@ struct ContentView: View {
     private var modeSwitcher: some View {
         HStack(spacing: 10) {
             modeButton(.microscope, systemImage: "doc.on.doc", help: "Papers")
-            modeButton(.person, systemImage: "person", help: "Person")
+
+            // Social (coming soon)
+            Button {
+                showToast("Social features coming soon")
+            } label: {
+                Image(systemName: "person")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help("Social")
 
             Spacer()
 
@@ -257,6 +293,7 @@ struct ContentView: View {
                     selectedPaperObjectID = nil
                     selectedEventObjectID = nil
                     selectedTodoObjectID = nil
+                    selectedDefinitionObjectID = nil
                 }
             }
         } label: {
@@ -300,31 +337,14 @@ struct ContentView: View {
         selectedPaperObjectID = nil
         selectedEventObjectID = nil
         selectedTodoObjectID = nil
+        selectedDefinitionObjectID = nil
     }
 
     private var papersList: some View {
-        List(selection: $selectedPaperObjectID) {
-            ForEach(papers) { paper in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(displayTitle(for: paper))
-                        .font(.headline)
-
-                    let authorsLine = authorsDisplay(from: paper.authorsJSON)
-                    if !authorsLine.isEmpty {
-                        Text(authorsLine)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .tag(paper.objectID)
-                .contextMenu {
-                    Button("Edit") { paperBeingEdited = paper }
-                    Divider()
-                    Button("Delete", role: .destructive) { deletePaper(paper) }
-                }
-            }
-        }
-        .listStyle(.sidebar)
+        PaperSidebarTreeView(
+            selection: $selectedPaperObjectID,
+            paperBeingEdited: $paperBeingEdited
+        )
     }
 
     private var eventsList: some View {
@@ -376,6 +396,19 @@ struct ContentView: View {
         .listStyle(.sidebar)
     }
 
+    private var definitionsList: some View {
+        List(selection: $selectedDefinitionObjectID) {
+            ForEach(definitions) { d in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text((d.term ?? "").isEmpty ? "new term" : (d.term ?? "new term"))
+                        .font(.headline)
+                }
+                .tag(d.objectID)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
     // MARK: - Center
 
     private var center: some View {
@@ -404,6 +437,11 @@ struct ContentView: View {
                         rows: eventsSorted,
                         selection: eventSelectionSetBinding,
                         sortAscending: $eventsSortAscending
+                    )
+                } else if navigatorTab == .definitions {
+                    DefinitionsCenterView(
+                        rows: definitions.map { DefinitionRow(item: $0) },
+                        selection: definitionSelectionSetBinding
                     )
                 } else {
                     TodoCenterView(rows: todos.map { TodoRow(item: $0) }, selection: todoSelectionSetBinding)
@@ -475,42 +513,28 @@ struct ContentView: View {
         )
     }
 
+    private var definitionSelectionSetBinding: Binding<Set<NSManagedObjectID>> {
+        Binding(
+            get: { selectedDefinitionObjectID.map { [$0] } ?? [] },
+            set: { newSet in selectedDefinitionObjectID = newSet.first }
+        )
+    }
+
     // MARK: - Helpers
 
-    private func displayTitle(for paper: Paper) -> String {
-        let short = (paper.shortTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !short.isEmpty { return short }
-        return (paper.title ?? "Untitled")
-    }
-
-    private func authorsDisplay(from authorsJSON: String?) -> String {
-        guard let authorsJSON, let data = authorsJSON.data(using: .utf8) else { return "" }
-        do {
-            let authors = try JSONDecoder().decode([AuthorInput].self, from: data)
-            return authors
-                .filter {
-                    !$0.firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    !$0.lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                }
-                .map { a in
-                    let first = a.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let last = a.lastName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if first.isEmpty { return last }
-                    if last.isEmpty { return first }
-                    return "\(last), \(first)"
-                }
-                .joined(separator: " • ")
-        } catch {
-            return ""
+    private func showToast(_ message: String) {
+        toastMessage = message
+        withAnimation(.easeOut(duration: 0.15)) {
+            toastVisible = true
         }
-    }
 
-    private func deletePaper(_ paper: Paper) {
-        withAnimation {
-            if selectedPaperObjectID == paper.objectID { selectedPaperObjectID = nil }
-            viewContext.delete(paper)
-            do { try viewContext.save() }
-            catch { let nsError = error as NSError; fatalError("Unresolved error \(nsError), \(nsError.userInfo)") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            withAnimation(.easeIn(duration: 0.2)) {
+                toastVisible = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                toastMessage = nil
+            }
         }
     }
 
@@ -541,6 +565,23 @@ struct ContentView: View {
                 selectedTodoObjectID = t.objectID
             } catch {
                 print("Failed to add todo:", error)
+            }
+        }
+    }
+
+    private func addDefinitionItem() {
+        withAnimation {
+            let d = DefinitionItem(context: viewContext)
+            d.id = UUID()
+            d.createdAt = Date()
+            d.term = "new term"
+            d.definitionText = ""
+
+            do {
+                try viewContext.save()
+                selectedDefinitionObjectID = d.objectID
+            } catch {
+                print("Failed to add definition:", error)
             }
         }
     }

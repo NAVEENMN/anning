@@ -50,5 +50,28 @@ enum RichTextStorage {
     static func isEffectivelyEmpty(_ stored: String?) -> Bool {
         plainText(stored).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    /// Ensure the text has a usable default font/color if the loaded content didn't include them.
+    static func ensureDefaults(_ attr: NSMutableAttributedString) {
+        guard attr.length > 0 else { return }
+
+        let full = NSRange(location: 0, length: attr.length)
+
+        var hasFont = false
+        attr.enumerateAttribute(.font, in: full) { value, _, stop in
+            if value != nil { hasFont = true; stop.pointee = true }
+        }
+        if !hasFont {
+            attr.addAttribute(.font, value: NSFont.systemFont(ofSize: 13), range: full)
+        }
+
+        var hasColor = false
+        attr.enumerateAttribute(.foregroundColor, in: full) { value, _, stop in
+            if value != nil { hasColor = true; stop.pointee = true }
+        }
+        if !hasColor {
+            attr.addAttribute(.foregroundColor, value: NSColor.labelColor, range: full)
+        }
+    }
 }
 

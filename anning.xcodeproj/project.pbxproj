@@ -6,8 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		260FEDF52F15AA6400F322F5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 260FEDF42F15AA6400F322F5 /* FirebaseAuth */; };
+		260FEDF72F15AA6400F322F5 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 260FEDF62F15AA6400F322F5 /* FirebaseCore */; };
+		260FEDF92F15AA6400F322F5 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = 260FEDF82F15AA6400F322F5 /* FirebaseDatabase */; };
+		260FEDFB2F15AA6400F322F5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 260FEDFA2F15AA6400F322F5 /* FirebaseFirestore */; };
+		260FEDFD2F15AA6400F322F5 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 260FEDFC2F15AA6400F322F5 /* FirebaseMessaging */; };
+		260FEDFF2F15AF6C00F322F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 260FEDFE2F15AF6C00F322F5 /* GoogleService-Info.plist */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		260FEDA02F0C599500F322F5 /* anning.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = anning.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		260FEDFE2F15AF6C00F322F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +33,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				260FEDF92F15AA6400F322F5 /* FirebaseDatabase in Frameworks */,
+				260FEDFB2F15AA6400F322F5 /* FirebaseFirestore in Frameworks */,
+				260FEDFD2F15AA6400F322F5 /* FirebaseMessaging in Frameworks */,
+				260FEDF72F15AA6400F322F5 /* FirebaseCore in Frameworks */,
+				260FEDF52F15AA6400F322F5 /* FirebaseAuth in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,6 +49,7 @@
 			children = (
 				260FEDA22F0C599500F322F5 /* anning */,
 				260FEDA12F0C599500F322F5 /* Products */,
+				260FEDFE2F15AF6C00F322F5 /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -65,6 +81,11 @@
 			);
 			name = anning;
 			packageProductDependencies = (
+				260FEDF42F15AA6400F322F5 /* FirebaseAuth */,
+				260FEDF62F15AA6400F322F5 /* FirebaseCore */,
+				260FEDF82F15AA6400F322F5 /* FirebaseDatabase */,
+				260FEDFA2F15AA6400F322F5 /* FirebaseFirestore */,
+				260FEDFC2F15AA6400F322F5 /* FirebaseMessaging */,
 			);
 			productName = anning;
 			productReference = 260FEDA02F0C599500F322F5 /* anning.app */;
@@ -94,6 +115,9 @@
 			);
 			mainGroup = 260FED972F0C599500F322F5;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 260FEDA12F0C599500F322F5 /* Products */;
 			projectDirPath = "";
@@ -109,6 +133,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				260FEDFF2F15AF6C00F322F5 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,6 +275,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = anning/anning.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -293,6 +320,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = anning/anning.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -353,6 +382,45 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		260FEDF42F15AA6400F322F5 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		260FEDF62F15AA6400F322F5 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		260FEDF82F15AA6400F322F5 /* FirebaseDatabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseDatabase;
+		};
+		260FEDFA2F15AA6400F322F5 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		260FEDFC2F15AA6400F322F5 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 260FEDF32F15AA6400F322F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 260FED982F0C599500F322F5 /* Project object */;
 }
