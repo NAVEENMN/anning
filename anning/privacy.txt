@@ -1,0 +1,108 @@
+Privacy Policy
+
+Last updated: January 14, 2026
+
+Overview
+
+Anning is designed to respect your privacy. We do not collect, sell, or share personal data. All data entered into the app is stored locally on your device unless explicitly stated otherwise.
+
+By using Anning, you agree to the practices described in this Privacy Policy.
+
+⸻
+
+Information We Collect
+
+Personal Information
+
+We do not collect personal information such as:
+    •    Name
+    •    Email address
+    •    Phone number
+    •    Location data
+    •    Contacts
+    •    Identifiers tied to your identity
+
+⸻
+
+User-Provided Content
+
+Anning allows you to enter and manage:
+    •    Research paper links or metadata
+    •    Notes and research objectives
+    •    Organizational metadata created by you
+
+This content:
+    •    Is stored locally on your device
+    •    Is not transmitted to our servers
+    •    Is not accessed by the developer
+
+⸻
+
+Data Storage
+
+All app data is stored locally using on-device storage mechanisms provided by the operating system.
+
+We do not operate backend servers that store your app data.
+
+⸻
+
+Third-Party Services
+
+Anning does not:
+    •    Use third-party analytics tools
+    •    Use advertising SDKs
+    •    Track user behavior
+    •    Share data with external services
+
+If future versions introduce optional online features, this policy will be updated accordingly.
+
+⸻
+
+Data Sharing
+
+We do not share data with:
+    •    Advertisers
+    •    Analytics providers
+    •    Data brokers
+    •    Third-party organizations
+
+⸻
+
+Data Security
+
+Because data is stored locally on your device:
+    •    Security depends on your device’s operating system protections
+    •    The app does not transmit sensitive data over the network
+
+⸻
+
+Children’s Privacy
+
+Anning does not knowingly collect data from children under the age of 13.
+
+⸻
+
+Changes to This Privacy Policy
+
+We may update this Privacy Policy from time to time.
+Any changes will be reflected by updating the “Last updated” date at the top of this document.
+
+⸻
+
+Contact
+
+If you have questions or concerns about this Privacy Policy, you may contact:
+
+Email: nmysore.work@gmail.com
+
+⸻
+
+Summary
+    •    No personal data collection
+    •    No tracking
+    •    No analytics
+    •    No ads
+    •    Local-only storage
+
+⸻
+
